@@ -1,15 +1,18 @@
 # AnimeTracker
 
-一款以 PyQt6 建構的 Windows 桌面應用程式，整合巴哈姆特動畫瘋行動版 API，提供流暢的動畫目錄瀏覽體驗。
+一款以 PyQt6 建構的 Windows 桌面應用程式，整合巴哈姆特動畫瘋 API，提供流暢的動畫目錄瀏覽體驗。
 
 ## 功能
 
-- **首頁 / 熱門動畫** — 即時熱門、本季新番、新上架分類瀏覽
-- **推薦主題** — 巴哈姆特每日編輯推薦（動態載入，無需額外請求）
-- **關鍵字搜尋** — 400ms 防抖節流，搜尋結果含評分顯示
-- **動畫詳情** — 劇情簡介、評分、導演、製作公司、分集列表（點擊集數直接開啟官網）
+- **首頁** — 近期熱播動畫卡片格狀瀏覽
+- **本季新番** — 依週幾排列的播出時間表，使用動畫封面圖（非單集縮圖）
+- **新上架** — 最新上架動畫，支援往下載入更多
+- **所有動畫** — Web API 完整動畫清單，含標籤篩選 chips（動作/校園/戀愛等 34 種）
+- **推薦主題** — 巴哈姆特編輯推薦分類，點擊可查看該主題所有作品
 - **我的最愛** — 本機持久化收藏清單，跨次啟動保留
-- **觀看清單** — 本機持久化待看清單，跨次啟動保留
+- **關鍵字搜尋** — 400 ms 防抖，搜尋結果含評分顯示
+- **動畫詳情** — 評分（從 API 動態載入）、劇情簡介、導演、標籤、分集列表（點擊直接開啟官網）
+- **評分快取** — 查看詳情後評分自動回填至卡片，切換頁面後仍保留
 - **封面圖快取** — 磁碟快取，7 天 TTL，離線可用舊快取
 - **非同步載入** — 所有 API 與圖片下載均在背景執行，UI 不卡頓
 - **巴哈姆特深色主題** — 仿巴哈姆特深色模式配色（極深藍黑背景 + 橘紅強調色）
@@ -17,7 +20,7 @@
 ## 系統需求
 
 - Windows 10 / 11（64-bit）
-- Python 3.10 以上（使用 Python 版執行）
+- Python 3.10 以上（使用 Python 版執行時需要）
 - 或直接執行 `dist\AnimeTracker\AnimeTracker.exe`（免安裝 Python）
 
 ## 安裝與執行
@@ -50,7 +53,7 @@ dist\AnimeTracker\AnimeTracker.exe
 # 1. 確認虛擬環境已啟動
 venv\Scripts\activate
 
-# 2. 安裝 PyInstaller
+# 2. 安裝 PyInstaller（若尚未安裝）
 pip install pyinstaller
 
 # 3. 編譯（或直接雙擊 build.bat）
@@ -86,22 +89,22 @@ AnimeTracker/
 ├── build.bat                        # 一鍵編譯腳本（手動執行）
 ├── src/
 │   ├── api/
-│   │   ├── client.py               # BahamutAnimeClient（速率限制、重試）
-│   │   └── models.py               # AnimeItem、AnimeDetail 資料模型
+│   │   ├── client.py               # BahamutAnimeClient（mobile + web API）
+│   │   └── models.py               # AnimeItem（含 tags）、AnimeDetail 資料模型
 │   ├── ui/
-│   │   ├── main_window.py          # 主視窗（協調所有元件）
+│   │   ├── main_window.py          # 主視窗（score_cache、tag_filter_changed）
 │   │   ├── search_bar.py           # 頂部搜尋列（含防抖）
-│   │   ├── category_sidebar.py     # 左側導覽側欄（含動態推薦主題）
-│   │   ├── anime_grid.py           # 動畫卡片格狀版面（世代計數器）
-│   │   ├── anime_card.py           # 單張動畫卡片（含最愛/觀看清單按鈕）
-│   │   ├── anime_detail_dialog.py  # 動畫詳情對話框
+│   │   ├── category_sidebar.py     # 左側靜態導覽側欄
+│   │   ├── anime_grid.py           # 多模式卡片格狀版面（世代計數器、tag chips）
+│   │   ├── anime_card.py           # 單張動畫卡片（QPushButton 最愛按鈕）
+│   │   ├── anime_detail_dialog.py  # 動畫詳情對話框（detail_loaded signal）
 │   │   └── theme.py                # 全域暗色主題樣式表
 │   ├── workers/
 │   │   ├── api_worker.py           # ApiWorker（QRunnable + WorkerSignals）
 │   │   └── image_worker.py         # ImageWorker（背景下載封面圖）
 │   └── utils/
 │       ├── cache.py                # 磁碟圖片快取（%APPDATA%/AnimeTracker/cache）
-│       └── store.py                # 本機 JSON 儲存（最愛 / 觀看清單）
+│       └── store.py                # 本機 JSON 儲存（最愛清單）
 └── tests/
     ├── test_models.py              # 資料模型解析測試
     └── test_api_client.py          # API 客戶端測試（HTTP mock）
@@ -121,38 +124,51 @@ AnimeTracker/
 
 `WorkerSignals(QObject)` 是 `QRunnable` 的伴隨物件，負責跨執行緒安全地發出信號。圖片以 `bytes` 傳遞（非 QPixmap），確保 `QPixmap` 只在主執行緒建立。
 
-### 世代計數器（AnimeGrid）
+### 評分快取機制
 
-每次切換頁面時 `_generation` 遞增，`ImageWorker` 結果帶有派送時的世代號碼，過期結果直接丟棄：
-
-```python
-if generation != self._generation:
-    return  # 丟棄過期圖片回調
+```
+點擊卡片 → AnimeDetailDialog.exec()
+                 ↓ detail_loaded(sn, score) signal（detail 載入後）
+         MainWindow._score_cache[sn] = score
+                 ↓ dialog 關閉
+         AnimeGrid.update_card_score(sn, score)   ← 更新當前卡片
+         ── 切換頁面時 ──
+         display_*() → apply_score_cache(cache)  ← 套用所有已快取評分
 ```
 
-### 本機儲存（最愛 / 觀看清單）
+### 標籤篩選架構
+
+```
+AnimeGrid 的 tag chip 點擊
+    ↓ tag_filter_changed.emit(tag)
+MainWindow._on_tag_filter_changed(tag)
+    ↓ _load_all_anime(tags=tag)
+ApiWorker → get_web_anime_list(tags=tag)
+    ↓ _on_all_anime_loaded(items)
+display_all_with_filter(items, active_tag=tag)
+```
+
+### API 端點狀態
+
+| 功能 | 端點 | 狀態 |
+|------|------|------|
+| 首頁 / 分類索引 | mobile `v3/index.php` | ✅ 正常 |
+| 搜尋 | mobile `v1/search.php?kw={keyword}` | ✅ 正常（含評分） |
+| 詳情 | mobile `v3/video.php?anime_sn={id}` | ✅ 正常（含評分、集數） |
+| 所有動畫（tag 篩選）| web `v1/anime_list.php?tags={tag}&page={n}` | ✅ 正常（含 tags 欄位） |
+| 分類列表 | mobile `v2/list.php` | ❌ API 版本限制 |
+
+> `v2/list.php` 回傳「APP版本過舊」，已改以 `v3/index.php` 各分區與 web API 提供替代內容。
+
+請求策略：mobile API 間隔 ≥ 1 秒、失敗重試 3 次（指數退避）；web API 使用獨立 session。
+
+### 本機儲存（最愛）
 
 `LocalStore` 以 JSON 持久化至 `%APPDATA%\AnimeTracker\data\`：
 
 ```
 favorites.json   ← 最愛清單
-watchlist.json   ← 觀看清單
 ```
-
-### API 端點狀態
-
-使用巴哈姆特行動版非官方 API：
-
-| 功能 | 端點 | 狀態 |
-|------|------|------|
-| 首頁 / 所有分類 | `v3/index.php` | ✅ 正常 |
-| 搜尋 | `v1/search.php?kw={keyword}` | ✅ 正常（含評分） |
-| 詳情 | `v3/video.php?anime_sn={id}` | ✅ 正常 |
-| 分類列表 | `v2/list.php?c={0-13}&page={n}` | ❌ API 版本限制 |
-
-> `v2/list.php` 目前回傳「APP版本過舊」錯誤，已改以 `v3/index.php` 的各分區提供替代內容。
-
-請求間隔 ≥ 1 秒，失敗時最多重試 3 次（指數退避）。
 
 ## 資料儲存路徑
 
@@ -160,10 +176,9 @@ watchlist.json   ← 觀看清單
 |------|------|
 | 封面圖快取 | `%APPDATA%\AnimeTracker\cache\images\{anime_sn}.jpg` |
 | 最愛清單 | `%APPDATA%\AnimeTracker\data\favorites.json` |
-| 觀看清單 | `%APPDATA%\AnimeTracker\data\watchlist.json` |
 
 ## 注意事項
 
 - 本應用程式僅供個人學習，請遵守[巴哈姆特使用條款](https://www.gamer.com.tw/tos.php)
 - 不提供串流播放功能；點擊集數按鈕或「在動畫瘋觀看」會開啟瀏覽器前往官方頁面
-- 評分資料僅搜尋結果具有；熱門/新番頁面依 API 限制不提供評分
+- 卡片評分在首次點開詳情後載入；之後切換頁面仍會保留（評分快取機制）

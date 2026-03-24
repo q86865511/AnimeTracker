@@ -75,6 +75,7 @@ class AnimeItem:
     score: float = 0.0
     popular: int = 0
     highlight_tag: HighlightTag = field(default_factory=HighlightTag)
+    tags: list[str] = field(default_factory=list)
 
     @property
     def cover_url(self) -> str:
@@ -109,14 +110,24 @@ class AnimeItem:
         if "/2KU/" in cover_raw or "/2ku/" in cover_raw:
             cover_raw = ""
 
+        # Parse tags — may be list of strings or comma-separated string
+        raw_tags = data.get("tags", []) or []
+        if isinstance(raw_tags, str):
+            tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
+        elif isinstance(raw_tags, list):
+            tags = [str(t) for t in raw_tags if t]
+        else:
+            tags = []
+
         return cls(
             anime_sn=int(anime_sn or 0),
             acg_sn=int(acg_sn or 0),
-            title=data.get("title", "") or "",
+            title=data.get("title") or data.get("animeName") or "",
             _cover=cover_raw,
             score=float(score_raw or 0),
             popular=int(popular_raw or 0),
             highlight_tag=HighlightTag.from_dict(tag_data),
+            tags=tags,
         )
 
 

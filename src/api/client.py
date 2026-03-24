@@ -23,6 +23,7 @@ from .models import AnimeItem, AnimeDetail
 # ── API configuration ──────────────────────────────────────────────────────────
 
 MOBILE_API_BASE = "https://api.gamer.com.tw/mobile_app/anime"
+WEB_API_BASE    = "https://api.gamer.com.tw/anime/v1"
 
 MOBILE_HEADERS: dict[str, str] = {
     "User-Agent": (
@@ -32,6 +33,17 @@ MOBILE_HEADERS: dict[str, str] = {
     "X-Bahamut-App-Version": "328",
     "Accept-Encoding": "gzip",
     "Connection": "Keep-Alive",
+}
+
+WEB_HEADERS: dict[str, str] = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+    "Referer": "https://ani.gamer.com.tw/",
 }
 
 DEFAULT_COOLDOWN = 1.0
@@ -148,6 +160,41 @@ class BahamutAnimeClient:
         raw_items = (
             data_section.get("animeList")
             or data_section.get("anime_list")
+            or data_section.get("list")
+            or []
+        )
+        return self._parse_items(raw_items)
+
+    def get_web_anime_list(self, tags: str = "全部", page: int = 1) -> list[AnimeItem]:
+        """
+        Fetch paginated anime list from web API.
+
+        Unlike the mobile API, this endpoint returns items with ``tags`` field,
+        enabling tag-based filtering in the 所有動畫 view.
+        URL: https://api.gamer.com.tw/anime/v1/anime_list.php
+        ``tags`` can be "全部" for all anime, or a specific tag like "校園".
+        """
+        url = f"{WEB_API_BASE}/anime_list.php"
+        params = {
+            "tags": tags,
+            "category": "全部",
+            "target": "全部",
+            "sort": 1,
+            "page": page,
+        }
+        try:
+            resp = requests.get(
+                url, params=params, headers=WEB_HEADERS, timeout=self._timeout
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            raise BahamutApiError(f"Web anime list request failed: {exc}") from exc
+
+        data_section = data.get("data", {}) or {}
+        raw_items = (
+            data_section.get("anime")
+            or data_section.get("animeList")
             or data_section.get("list")
             or []
         )

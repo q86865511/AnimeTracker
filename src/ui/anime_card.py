@@ -115,15 +115,20 @@ class AnimeCard(QFrame):
         if self.anime.highlight_tag.new_arrival:
             self._add_badge("NEW", Colors.BADGE_NEW, 4, y)
 
-        # ── Favourite button (QPushButton overlay, top-right) ─────────────────
+        # ── Favourite button (child of _cover so it's always above the pixmap) ──
+        # Must be a child of self._cover, NOT a sibling.
+        # A sibling QPushButton positioned via move() + raise_() can still lose
+        # mouse events to the layout-managed QLabel in PyQt6's C++ dispatch.
+        # As a child of _cover, Qt routes clicks to the button first, then
+        # propagates up to _cover and AnimeCard only if not consumed.
         if self._fav_store is not None:
-            self._fav_btn = QPushButton(parent=self)
+            self._fav_btn = QPushButton(parent=self._cover)
             self._fav_btn.setFixedSize(_FAV_BTN_SIZE, _FAV_BTN_SIZE)
             self._fav_btn.setFlat(True)
             self._fav_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._fav_btn.move(COVER_W - _FAV_BTN_SIZE - 4, 4)
             self._fav_btn.clicked.connect(self._on_fav_clicked)
-            self._fav_btn.raise_()          # ensure it sits above the cover QLabel
+            self._fav_btn.raise_()
             self._refresh_fav_btn()
             self._fav_btn.show()
 
@@ -143,9 +148,10 @@ class AnimeCard(QFrame):
         y = (scaled.height() - COVER_H) // 2
         self._cover.setPixmap(scaled.copy(x, y, COVER_W, COVER_H))
         self._cover.setText("")
-        # Re-raise the fav button so it stays on top after image is set
+        # Re-raise and show the fav button so it stays on top after image is set
         if self._fav_store is not None and hasattr(self, "_fav_btn"):
             self._fav_btn.raise_()
+            self._fav_btn.show()
 
     # ── Private ───────────────────────────────────────────────────────────────
 
@@ -174,20 +180,22 @@ class AnimeCard(QFrame):
 
     def _refresh_fav_btn(self) -> None:
         is_fav = self._fav_store.contains(self.anime.anime_sn)
+        c = Colors
+        size = _FAV_BTN_FONT
         if is_fav:
             self._fav_btn.setText("❤")
             self._fav_btn.setStyleSheet(
-                f"QPushButton {{ color: {Colors.HEART_COLOR}; font-size: {_FAV_BTN_FONT}px;"
-                "  background-color: rgba(0,0,0,160); border: none; border-radius: 14px; }}"
-                f"QPushButton:hover {{ background-color: rgba(0,0,0,200); }}"
+                f"QPushButton {{ color: {c.HEART_COLOR}; font-size: {size}px;"
+                f" background-color: rgba(0,0,0,160); border: none; border-radius: 14px; }}"
+                f" QPushButton:hover {{ background-color: rgba(0,0,0,200); }}"
             )
             self._fav_btn.setToolTip("從最愛移除")
         else:
             self._fav_btn.setText("♡")
             self._fav_btn.setStyleSheet(
-                f"QPushButton {{ color: {Colors.HEART_OUTLINE}; font-size: {_FAV_BTN_FONT}px;"
-                "  background-color: rgba(0,0,0,140); border: none; border-radius: 14px; }}"
-                f"QPushButton:hover {{ color: {Colors.HEART_COLOR}; background-color: rgba(0,0,0,200); }}"
+                f"QPushButton {{ color: {c.HEART_OUTLINE}; font-size: {size}px;"
+                f" background-color: rgba(0,0,0,140); border: none; border-radius: 14px; }}"
+                f" QPushButton:hover {{ color: {c.HEART_COLOR}; background-color: rgba(0,0,0,200); }}"
             )
             self._fav_btn.setToolTip("加入最愛")
 

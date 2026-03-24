@@ -34,8 +34,17 @@ from src.ui.theme import Colors
 from src.utils.cache import ImageCache
 from src.workers.image_worker import ImageWorker
 
-COLUMNS      = 5
+COLUMNS      = 10
 CARD_SPACING = 14
+
+# Tag chips for 所有動畫 filter bar (matching ani.gamer.com.tw tag taxonomy)
+ANIME_TAGS = [
+    "動作", "冒險", "奇幻", "異世界", "魔法", "超能力", "科幻", "機甲",
+    "校園", "喜劇", "戀愛", "青春", "勵志", "溫馨", "悠閒", "料理",
+    "親情", "感人", "運動", "競技", "偶像", "音樂", "職場", "推理",
+    "懸疑", "時間穿越", "歷史", "戰爭", "血腥暴力", "靈異神怪", "黑暗",
+    "特攝", "BL", "GL",
+]
 
 # Weekday names (index 0-6 = 日 Mon…Sat, 7 = irregular)
 _WEEKDAY_LABELS = {
@@ -55,6 +64,7 @@ class AnimeGrid(QWidget):
 
     anime_selected    = pyqtSignal(object)          # AnimeItem
     theme_selected    = pyqtSignal(int, str)         # (index, title) for editorial category
+    tag_filter_changed = pyqtSignal(str)             # tag name; "全部" = reset
 
     def __init__(
         self,
@@ -145,6 +155,21 @@ class AnimeGrid(QWidget):
         self._status_label.hide()
 
     # ── Public: generic states ──────────────────────────────────────────────────
+
+    def update_card_score(self, anime_sn: int, score: float) -> None:
+        """Update the score display on a specific card (called after detail loads)."""
+        card = self._cards.get(anime_sn)
+        if card is not None and score:
+            card.anime.score = score
+            card._refresh_score()
+
+    def apply_score_cache(self, cache: dict[int, float]) -> None:
+        """Apply a score cache to all currently visible cards."""
+        for anime_sn, score in cache.items():
+            card = self._cards.get(anime_sn)
+            if card is not None and score > 0:
+                card.anime.score = score
+                card._refresh_score()
 
     def show_loading(self) -> None:
         self._clear()
@@ -293,21 +318,18 @@ class AnimeGrid(QWidget):
             self._load_more_btn.show()
 
     def display_all_with_filter(
-        self,
-        all_items: list[AnimeItem],
-        editorial_cats: list[tuple[str, list[AnimeItem]]],
+        self, all_items: list[AnimeItem], active_tag: str = "全部"
     ) -> None:
         """
-        所有動畫 — show all_items in a grid with genre/category filter chips.
-        Clicking a chip shows only that editorial category's items (fast, in-memory).
+        所有動畫 — show all_items in a grid with ANIME_TAGS filter chips.
+        Clicking a chip emits tag_filter_changed(tag); MainWindow handles the fetch.
         """
         self._generation += 1
         gen = self._generation
         self._clear()
         self._section_label.setText("🎬  所有動畫")
 
-        # Build filter bar
-        self._rebuild_filter_bar(all_items, editorial_cats, gen)
+        self._rebuild_filter_bar(active_tag)
 
         if not all_items:
             self._show_empty()
@@ -410,13 +432,8 @@ class AnimeGrid(QWidget):
 
         self._load_more_btn.clicked.connect(_on_load_more)
 
-    def _rebuild_filter_bar(
-        self,
-        all_items: list[AnimeItem],
-        editorial_cats: list[tuple[str, list[AnimeItem]]],
-        gen: int,
-    ) -> None:
-        # Clear existing chips
+    def _rebuild_filter_bar(self, active_tag: str = "全部") -> None:
+        """Build tag filter chips. Chip clicks emit tag_filter_changed — no in-memory filter."""
         while self._filter_bar_layout.count():
             item = self._filter_bar_layout.takeAt(0)
             if item.widget():
@@ -426,52 +443,42 @@ class AnimeGrid(QWidget):
         label.setStyleSheet(f"font-size: 13px; color: {Colors.TEXT_MUTED};")
         self._filter_bar_layout.addWidget(label)
 
-        def _make_chip(text: str, items: list[AnimeItem], active: bool = False) -> QPushButton:
+        chip_style = (
+            f"QPushButton {{ font-size: 12px; color: {Colors.CHIP_TEXT};"
+            f" background-color: {Colors.CHIP_BG}; border: 1px solid {Colors.BORDER};"
+            f" border-radius: 14px; padding: 0 12px; }}"
+            f" QPushButton:checked {{ background-color: {Colors.CHIP_ACTIVE};"
+            f" color: white; border-color: transparent; }}"
+            f" QPushButton:hover:!checked {{ color: {Colors.TEXT_PRIMARY}; }}"
+        )
+
+        def _make_chip(text: str) -> QPushButton:
             btn = QPushButton(text)
             btn.setCheckable(True)
-            btn.setChecked(active)
+            btn.setChecked(text == active_tag)
             btn.setFixedHeight(28)
             btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-            style_normal = (
-                f"QPushButton {{ font-size: 12px; color: {Colors.CHIP_TEXT};"
-                f" background-color: {Colors.CHIP_BG}; border: 1px solid {Colors.BORDER};"
-                " border-radius: 14px; padding: 0 12px; }}"
-                f"QPushButton:checked {{ background-color: {Colors.CHIP_ACTIVE};"
-                " color: white; border-color: transparent; }}"
-                f"QPushButton:hover:!checked {{ color: {Colors.TEXT_PRIMARY}; }}"
-            )
-            btn.setStyleSheet(style_normal)
+            btn.setStyleSheet(chip_style)
 
-            def _on_clicked(checked, _items=items, _btn=btn) -> None:
-                if gen != self._generation:
+            def _on_clicked(checked: bool, _btn: QPushButton = btn, t: str = text) -> None:
+                if not checked:
+                    # Prevent deselecting — always keep one chip active
+                    _btn.setChecked(True)
                     return
                 # Uncheck all siblings
                 for i in range(self._filter_bar_layout.count()):
                     w = self._filter_bar_layout.itemAt(i).widget()
                     if isinstance(w, QPushButton) and w is not _btn:
                         w.setChecked(False)
-
-                target = _items if checked else all_items
-                # Re-populate grid
-                while self._grid.count():
-                    it = self._grid.takeAt(0)
-                    ww = it.widget()
-                    if ww and ww is not self._status_label:
-                        ww.deleteLater()
-                self._cards.clear()
-                self._populate_grid(target)
-                self._load_images(target, gen)
+                self.tag_filter_changed.emit(t)
 
             btn.clicked.connect(_on_clicked)
             return btn
 
-        # "全部" chip
-        all_chip = _make_chip("全部", all_items, active=True)
-        self._filter_bar_layout.addWidget(all_chip)
-
-        for title, cat_items in editorial_cats:
-            chip = _make_chip(title, cat_items)
-            self._filter_bar_layout.addWidget(chip)
+        # "全部" always first, then all ANIME_TAGS
+        self._filter_bar_layout.addWidget(_make_chip("全部"))
+        for tag in ANIME_TAGS:
+            self._filter_bar_layout.addWidget(_make_chip(tag))
 
         self._filter_bar_layout.addStretch()
         self._filter_bar.show()

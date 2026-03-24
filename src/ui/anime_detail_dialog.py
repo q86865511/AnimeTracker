@@ -7,7 +7,7 @@ the description, score, and episode list.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QTimer, QThreadPool, QUrl
+from PyQt6.QtCore import Qt, QTimer, QThreadPool, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QPixmap
 from PyQt6.QtWidgets import (
     QDialog,
@@ -31,6 +31,8 @@ from src.workers.image_worker import ImageWorker
 class AnimeDetailDialog(QDialog):
     """Modal dialog displaying full information about one anime."""
 
+    detail_loaded = pyqtSignal(int, float)   # (anime_sn, score)
+
     def __init__(
         self,
         anime: AnimeItem,
@@ -51,9 +53,15 @@ class AnimeDetailDialog(QDialog):
         self.setMinimumSize(760, 580)
         self.resize(860, 660)
         self.setModal(True)
+        self._loaded_score: float = 0.0
 
         self._build_ui()
         QTimer.singleShot(0, self._start_loading)
+
+    @property
+    def loaded_score(self) -> float:
+        """Score returned by AnimeDetail after async load; 0 if not yet loaded."""
+        return self._loaded_score
 
     # ── UI construction ────────────────────────────────────────────────────────
 
@@ -231,10 +239,12 @@ class AnimeDetailDialog(QDialog):
 
         # Update score from detail (detail.score is reliable; AnimeItem.score may be 0)
         if detail.score:
+            self._loaded_score = detail.score
             self._star_lbl.setText(f"★ {detail.score_display}")
             self._star_lbl.setStyleSheet(
                 f"font-size: 22px; font-weight: bold; color: {Colors.STAR_COLOR};"
             )
+            self.detail_loaded.emit(self._anime.anime_sn, detail.score)
 
         rows: list[tuple[str, str]] = []
         if detail.rating_name:
@@ -281,14 +291,16 @@ class AnimeDetailDialog(QDialog):
             ep_row.setSpacing(4)
             for i, vol in enumerate(vol_items[:50]):
                 btn = QPushButton(str(vol.volume))
-                btn.setFixedSize(44, 32)
+                btn.setFixedHeight(34)
+                btn.setMinimumWidth(44)
+                btn.setStyleSheet("font-size: 14px;")
                 btn.setToolTip(f"第 {vol.volume} 集")
                 url = f"https://ani.gamer.com.tw/animeVideo.php?sn={vol.video_sn}"
                 btn.clicked.connect(
                     lambda checked, u=url: QDesktopServices.openUrl(QUrl(u))
                 )
                 ep_row.addWidget(btn)
-                if (i + 1) % 10 == 0:
+                if (i + 1) % 8 == 0:
                     ep_row.addStretch()
                     self._ep_inner_layout.addLayout(ep_row)
                     ep_row = QHBoxLayout()
