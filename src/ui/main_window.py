@@ -24,9 +24,8 @@ from src.ui.anime_detail_dialog import AnimeDetailDialog
 from src.ui.anime_grid import AnimeGrid
 from src.ui.category_sidebar import (
     CategorySidebar,
-    HOME_ID, FAVORITES_ID, WATCHLIST_ID,
-    NEW_ANIME_ID, NEW_ADDED_ID, HOT_ANIME_ID,
-    EDITORIAL_BASE,
+    HOME_ID, FAVORITES_ID,
+    NEW_SEASON_ID, NEW_ADDED_ID, ALL_ANIME_ID, THEMES_ID,
 )
 from src.ui.search_bar import SearchBar
 from src.utils.cache import ImageCache
@@ -45,7 +44,6 @@ class MainWindow(QMainWindow):
         self._pool.setMaxThreadCount(6)
 
         self._fav_store = LocalStore("favorites.json")
-        self._watch_store = LocalStore("watchlist.json")
 
         # Cache of the last v3/index.php response
         self._index_data: dict = {}
@@ -81,11 +79,11 @@ class MainWindow(QMainWindow):
         self._grid = AnimeGrid(
             self._cache, self._pool,
             fav_store=self._fav_store,
-            watch_store=self._watch_store,
         )
         self._grid.anime_selected.connect(self._on_anime_selected)
+        self._grid.theme_selected.connect(self._on_theme_selected)
         splitter.addWidget(self._grid)
-        splitter.setSizes([190, 1090])
+        splitter.setSizes([195, 1085])
 
         self._status = QStatusBar()
         self.setStatusBar(self._status)
@@ -109,66 +107,100 @@ class MainWindow(QMainWindow):
         worker.signals.error.connect(self._on_api_error)
         self._pool.start(worker)
 
-    # ── Index section helpers (no additional API call) ─────────────────────────
+    # ── Index data helpers ─────────────────────────────────────────────────────
 
-    def _show_section(self, key: str, title: str) -> None:
-        """Display a top-level list from the cached index data."""
-        raw = self._index_data.get(key, []) or []
-        items = self._client._parse_items(raw)
-        self._grid.display_anime_list(items, title=title)
-        self._status.showMessage(f"{title}：{len(items)} 部動畫")
+    def _get_new_added(self) -> list[AnimeItem]:
+        raw = self._index_data.get("newAdded", []) or []
+        return self._client._parse_items(raw)
 
-    def _show_editorial(self, cat_index: int) -> None:
-        """Display an editorial category from the cached index data."""
+    def _get_new_anime_items(self) -> list[AnimeItem]:
+        """Items from newAnime.date (the weekly schedule list)."""
+        raw_new = self._index_data.get("newAnime", {}) or {}
+        if isinstance(raw_new, dict):
+            items_raw = raw_new.get("date") or raw_new.get("popular") or []
+        else:
+            items_raw = []
+        return self._client._parse_items(items_raw)
+
+    def _get_editorial_cats(self) -> list[tuple[str, list[AnimeItem]]]:
+        """Return list of (title, items) for each editorial category."""
         cats = self._index_data.get("category", []) or []
-        if cat_index >= len(cats):
-            self._grid.show_error("分類資料不存在")
-            return
-        cat = cats[cat_index]
-        raw = cat.get("list", []) or []
-        items = self._client._parse_items(raw)
-        title = cat.get("title", f"推薦主題 {cat_index + 1}")
-        self._grid.display_anime_list(items, title=title)
-        self._status.showMessage(f"{title}：{len(items)} 部動畫")
+        result: list[tuple[str, list[AnimeItem]]] = []
+        for i, cat in enumerate(cats):
+            raw_list = cat.get("list") or []
+            items = self._client._parse_items(raw_list)
+            if items:
+                title = cat.get("title", f"主題 {i + 1}")
+                result.append((title, items))
+        return result
+
+    def _get_all_items_aggregated(self) -> list[AnimeItem]:
+        """Deduplicated union of hotAnime + newAdded + newAnime for 所有動畫 view."""
+        hot = self._client._parse_items(self._index_data.get("hotAnime", []) or [])
+        new_added = self._get_new_added()
+        new_anime = self._get_new_anime_items()
+
+        seen: set[int] = set()
+        result: list[AnimeItem] = []
+        for item in hot + new_added + new_anime:
+            if item.anime_sn and item.anime_sn not in seen:
+                seen.add(item.anime_sn)
+                result.append(item)
+        return result
 
     # ── Signal handlers ────────────────────────────────────────────────────────
 
     def _on_category_changed(self, cat_id: int) -> None:
         self._search_bar.clear()
 
+        if not self._index_data:
+            # Index not loaded yet — load home first, then re-route
+            self._grid.show_loading()
+            worker = ApiWorker(self._client.get_index)
+            worker.signals.result.connect(
+                lambda data, cid=cat_id: self._on_deferred_index(data, cid)
+            )
+            worker.signals.error.connect(self._on_api_error)
+            self._pool.start(worker)
+            return
+
+        self._route_category(cat_id)
+
+    def _on_deferred_index(self, data: dict, cat_id: int) -> None:
+        self._index_data = data
+        self._route_category(cat_id)
+
+    def _route_category(self, cat_id: int) -> None:
         if cat_id == HOME_ID:
-            if self._index_data:
-                self._grid.display_home(self._index_data)
-                self._status.showMessage("就緒")
-            else:
-                self._load_home()
+            self._grid.display_home(self._index_data)
+            self._status.showMessage("就緒")
 
         elif cat_id == FAVORITES_ID:
             items = self._fav_store.to_anime_items()
             self._grid.display_anime_list(items, title=f"❤  我的最愛（{len(items)} 部）")
             self._status.showMessage(f"最愛清單：{len(items)} 部動畫")
 
-        elif cat_id == WATCHLIST_ID:
-            items = self._watch_store.to_anime_items()
-            self._grid.display_anime_list(items, title=f"📖  觀看清單（{len(items)} 部）")
-            self._status.showMessage(f"觀看清單：{len(items)} 部動畫")
-
-        elif cat_id == HOT_ANIME_ID:
-            self._show_section("hotAnime", "🔥  熱門動畫")
-
-        elif cat_id == NEW_ANIME_ID:
-            # newAnime is {"date": [...], "popular": [...]}; show by date
-            raw = self._index_data.get("newAnime", {}) or {}
-            items = self._client._parse_items(raw.get("date") or raw.get("popular") or [])
-            self._grid.display_anime_list(items, title="🗓  本季新番")
+        elif cat_id == NEW_SEASON_ID:
+            self._grid.display_weekly_schedule(self._index_data)
+            items = self._get_new_anime_items()
             self._status.showMessage(f"本季新番：{len(items)} 部動畫")
 
         elif cat_id == NEW_ADDED_ID:
-            self._show_section("newAdded", "🆕  新上架")
+            new_added = self._get_new_added()
+            new_anime = self._get_new_anime_items()
+            self._grid.display_new_added(new_added, new_anime)
+            self._status.showMessage(f"新上架：{len(new_added)} 部動畫")
 
-        elif cat_id <= EDITORIAL_BASE:
-            cat_index = EDITORIAL_BASE - cat_id   # -20 → 0, -21 → 1, …
-            self._show_editorial(cat_index)
+        elif cat_id == ALL_ANIME_ID:
+            all_items = self._get_all_items_aggregated()
+            editorial_cats = self._get_editorial_cats()
+            self._grid.display_all_with_filter(all_items, editorial_cats)
+            self._status.showMessage(f"所有動畫：{len(all_items)} 部")
+
+        elif cat_id == THEMES_ID:
+            editorial_cats = self._get_editorial_cats()
+            self._grid.display_editorial_themes(editorial_cats)
+            self._status.showMessage(f"推薦主題：{len(editorial_cats)} 個")
 
     def _on_searched(self, keyword: str) -> None:
         if not keyword:
@@ -184,24 +216,24 @@ class MainWindow(QMainWindow):
         dialog = AnimeDetailDialog(
             anime, self._client, self._cache, self._pool,
             fav_store=self._fav_store,
-            watch_store=self._watch_store,
             parent=self,
         )
         dialog.exec()
+
+    def _on_theme_selected(self, index: int, title: str) -> None:
+        """User clicked a theme panel in 推薦主題 — show that theme's anime list."""
+        cats = self._index_data.get("category", []) or []
+        if index >= len(cats):
+            return
+        raw_list = cats[index].get("list") or []
+        items = self._client._parse_items(raw_list)
+        self._grid.display_anime_list(items, title=f"🌟  {title}")
+        self._status.showMessage(f"{title}：{len(items)} 部動畫")
 
     def _on_home_loaded(self, data: dict) -> None:
         self._index_data = data
         self._grid.display_home(data)
         self._status.showMessage("就緒")
-
-        # Populate sidebar with editorial categories
-        cats = data.get("category", []) or []
-        editorial = [
-            (c.get("title", f"主題 {i+1}"), EDITORIAL_BASE - i)
-            for i, c in enumerate(cats)
-            if c.get("list")
-        ]
-        self._sidebar.set_editorial_categories(editorial)
 
     def _on_search_loaded(self, items: list[AnimeItem]) -> None:
         self._grid.display_search_results(items)

@@ -3,9 +3,7 @@ Anime detail dialog.
 
 Opens when the user clicks an anime card. Shows basic info immediately from
 AnimeItem data, then fetches full AnimeDetail in the background to populate
-the description and episode list.
-
-Includes Favorite and Watchlist toggle buttons.
+the description, score, and episode list.
 """
 from __future__ import annotations
 
@@ -40,7 +38,6 @@ class AnimeDetailDialog(QDialog):
         cache: ImageCache,
         pool: QThreadPool,
         fav_store=None,
-        watch_store=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -49,7 +46,6 @@ class AnimeDetailDialog(QDialog):
         self._cache = cache
         self._pool = pool
         self._fav_store = fav_store
-        self._watch_store = watch_store
 
         self.setWindowTitle(anime.title)
         self.setMinimumSize(760, 580)
@@ -105,16 +101,16 @@ class AnimeDetailDialog(QDialog):
         )
         info.addWidget(title_lbl)
 
-        # Score row
+        # Score row — stored as instance variable so we can update it later
         score_row = QHBoxLayout()
         score_row.setSpacing(6)
         score_val = self._anime.score_display
         score_color = Colors.STAR_COLOR if self._anime.score else Colors.TEXT_MUTED
-        star_lbl = QLabel(f"★ {score_val}")
-        star_lbl.setStyleSheet(
+        self._star_lbl = QLabel(f"★ {score_val}")
+        self._star_lbl.setStyleSheet(
             f"font-size: 22px; font-weight: bold; color: {score_color};"
         )
-        score_row.addWidget(star_lbl)
+        score_row.addWidget(self._star_lbl)
         if self._anime.popular:
             pop_lbl = QLabel(f"  👁 {self._anime.popular_display}")
             pop_lbl.setStyleSheet(
@@ -148,7 +144,7 @@ class AnimeDetailDialog(QDialog):
 
         info.addStretch()
 
-        # Favorite + Watchlist toggle buttons
+        # Favourite toggle button
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
 
@@ -158,13 +154,6 @@ class AnimeDetailDialog(QDialog):
             self._fav_btn.clicked.connect(self._toggle_favorite)
             self._update_fav_btn()
             action_row.addWidget(self._fav_btn)
-
-        if self._watch_store is not None:
-            self._watch_btn = QPushButton()
-            self._watch_btn.setFixedHeight(34)
-            self._watch_btn.clicked.connect(self._toggle_watchlist)
-            self._update_watch_btn()
-            action_row.addWidget(self._watch_btn)
 
         action_row.addStretch()
         info.addLayout(action_row)
@@ -239,6 +228,13 @@ class AnimeDetailDialog(QDialog):
 
         if detail.title:
             self.setWindowTitle(detail.title)
+
+        # Update score from detail (detail.score is reliable; AnimeItem.score may be 0)
+        if detail.score:
+            self._star_lbl.setText(f"★ {detail.score_display}")
+            self._star_lbl.setStyleSheet(
+                f"font-size: 22px; font-weight: bold; color: {Colors.STAR_COLOR};"
+            )
 
         rows: list[tuple[str, str]] = []
         if detail.rating_name:
@@ -326,22 +322,17 @@ class AnimeDetailDialog(QDialog):
         self._cover_label.setPixmap(cropped)
         self._cover_label.setText("")
 
-    # ── Favorite / watchlist toggles ───────────────────────────────────────────
+    # ── Favourite toggle ───────────────────────────────────────────────────────
 
     def _toggle_favorite(self) -> None:
         if self._fav_store:
             self._fav_store.toggle(self._anime)
             self._update_fav_btn()
 
-    def _toggle_watchlist(self) -> None:
-        if self._watch_store:
-            self._watch_store.toggle(self._anime)
-            self._update_watch_btn()
-
     def _update_fav_btn(self) -> None:
         is_fav = self._fav_store.contains(self._anime.anime_sn)
         if is_fav:
-            self._fav_btn.setText(f"❤  從最愛移除")
+            self._fav_btn.setText("❤  從最愛移除")
             self._fav_btn.setStyleSheet(
                 f"background-color: {Colors.HEART_COLOR}; color: white;"
                 " border: none; border-radius: 5px; padding: 5px 14px;"
@@ -349,18 +340,6 @@ class AnimeDetailDialog(QDialog):
         else:
             self._fav_btn.setText("♡  加入最愛")
             self._fav_btn.setStyleSheet("")
-
-    def _update_watch_btn(self) -> None:
-        is_watch = self._watch_store.contains(self._anime.anime_sn)
-        if is_watch:
-            self._watch_btn.setText("📖  從觀看清單移除")
-            self._watch_btn.setStyleSheet(
-                f"background-color: {Colors.WATCH_COLOR}; color: white;"
-                " border: none; border-radius: 5px; padding: 5px 14px;"
-            )
-        else:
-            self._watch_btn.setText("🔖  加入觀看清單")
-            self._watch_btn.setStyleSheet("")
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 

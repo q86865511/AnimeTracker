@@ -32,11 +32,14 @@ class Colors:
     # ── Indicators ────────────────────────────────────────────────────────────
     STAR_COLOR      = "#f4c542"
     HEART_COLOR     = "#ff4466"
-    HEART_OUTLINE   = "#606080"
-    WATCH_COLOR     = "#44aaff"
-    WATCH_OUTLINE   = "#606080"
+    HEART_OUTLINE   = "#555570"
     BADGE_BILINGUAL = "#1a6b44"
     BADGE_NEW       = "#7722bb"
+
+    # ── Filter chip ───────────────────────────────────────────────────────────
+    CHIP_BG         = "#1c1c28"
+    CHIP_ACTIVE     = "#ff6b35"
+    CHIP_TEXT       = "#a8a8bc"
 
 
 DARK_STYLESHEET = f"""
@@ -45,7 +48,7 @@ QMainWindow, QDialog, QWidget {{
     background-color: {Colors.BG_PRIMARY};
     color: {Colors.TEXT_PRIMARY};
     font-family: "Microsoft JhengHei UI", "微軟正黑體", "Noto Sans TC", sans-serif;
-    font-size: 14px;
+    font-size: 15px;
 }}
 
 /* ── Buttons ─────────────────────────────────────────────────────── */
@@ -55,7 +58,7 @@ QPushButton {{
     border: 1px solid {Colors.BORDER};
     border-radius: 5px;
     padding: 6px 16px;
-    font-size: 13px;
+    font-size: 14px;
 }}
 QPushButton:hover {{
     background-color: {Colors.ACCENT};
@@ -78,7 +81,7 @@ QLineEdit {{
     border-radius: 6px;
     padding: 7px 12px;
     color: {Colors.TEXT_PRIMARY};
-    font-size: 14px;
+    font-size: 15px;
     selection-background-color: {Colors.ACCENT};
 }}
 QLineEdit:focus {{
@@ -93,10 +96,11 @@ QListWidget {{
     outline: none;
 }}
 QListWidget::item {{
-    padding: 9px 14px;
+    padding: 10px 14px;
     color: {Colors.TEXT_SECONDARY};
     border-radius: 4px;
     margin: 1px 4px;
+    font-size: 14px;
 }}
 QListWidget::item:selected {{
     background-color: {Colors.ACCENT};
@@ -122,27 +126,15 @@ QScrollBar::handle:vertical {{
 QScrollBar::handle:vertical:hover {{
     background: {Colors.ACCENT};
 }}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-    height: 0;
-}}
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-    background: none;
-}}
-QScrollBar:horizontal {{
-    height: 0;
-}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
+QScrollBar:horizontal {{ height: 0; }}
 
 /* ── Scroll areas ────────────────────────────────────────────────── */
-QScrollArea {{
-    border: none;
-    background-color: {Colors.BG_PRIMARY};
-}}
+QScrollArea {{ border: none; background-color: {Colors.BG_PRIMARY}; }}
 
 /* ── Splitter ────────────────────────────────────────────────────── */
-QSplitter::handle {{
-    background-color: {Colors.BORDER};
-    width: 1px;
-}}
+QSplitter::handle {{ background-color: {Colors.BORDER}; width: 1px; }}
 
 /* ── Text edit ───────────────────────────────────────────────────── */
 QTextEdit {{
@@ -151,7 +143,7 @@ QTextEdit {{
     border-radius: 6px;
     padding: 10px;
     color: {Colors.TEXT_PRIMARY};
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.6;
 }}
 
@@ -160,7 +152,7 @@ QStatusBar {{
     background-color: {Colors.BG_SECONDARY};
     color: {Colors.TEXT_MUTED};
     border-top: 1px solid {Colors.BORDER};
-    font-size: 12px;
+    font-size: 13px;
 }}
 
 /* ── Tool tips ───────────────────────────────────────────────────── */
@@ -170,12 +162,9 @@ QToolTip {{
     border: 1px solid {Colors.ACCENT};
     padding: 5px 10px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 13px;
 }}
 
 /* ── Labels ──────────────────────────────────────────────────────── */
-QLabel {{
-    color: {Colors.TEXT_PRIMARY};
-    background: transparent;
-}}
+QLabel {{ color: {Colors.TEXT_PRIMARY}; background: transparent; }}
 """

@@ -102,11 +102,18 @@ class AnimeItem:
         anime_sn = data.get("anime_sn") or data.get("animeSn") or 0
         acg_sn = data.get("acg_sn") or data.get("acgSn") or 0
 
+        # Ignore episode thumbnails (URL contains /2KU/ pattern).
+        # newAnime items return per-episode thumbnails in the `cover` field;
+        # we fall back to the acg_sn-derived anime cover URL instead.
+        cover_raw = data.get("cover", "") or ""
+        if "/2KU/" in cover_raw or "/2ku/" in cover_raw:
+            cover_raw = ""
+
         return cls(
             anime_sn=int(anime_sn or 0),
             acg_sn=int(acg_sn or 0),
             title=data.get("title", "") or "",
-            _cover=data.get("cover", "") or "",
+            _cover=cover_raw,
             score=float(score_raw or 0),
             popular=int(popular_raw or 0),
             highlight_tag=HighlightTag.from_dict(tag_data),
