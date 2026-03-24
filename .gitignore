@@ -1,0 +1,29 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Build output (PyInstaller) ────────────────────────────────────────────────
+# AnimeTracker.spec is kept in version control (intentional)
+dist/
+build/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+
+# ── Test cache ────────────────────────────────────────────────────────────────
+.pytest_cache/
+*.log
+
+# ── Local image cache (runtime data) ─────────────────────────────────────────
+cache/
+
+# ── Claude Code ───────────────────────────────────────────────────────────────
+.claude/
