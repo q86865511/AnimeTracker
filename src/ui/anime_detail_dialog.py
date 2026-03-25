@@ -344,7 +344,7 @@ class AnimeDetailDialog(QDialog):
     def _update_fav_btn(self) -> None:
         is_fav = self._fav_store.contains(self._anime.anime_sn)
         if is_fav:
-            self._fav_btn.setText("❤  從最愛移除")
+            self._fav_btn.setText("♥  從最愛移除")
             self._fav_btn.setStyleSheet(
                 f"background-color: {Colors.HEART_COLOR}; color: white;"
                 " border: none; border-radius: 5px; padding: 5px 14px;"

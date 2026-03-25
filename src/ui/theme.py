@@ -32,7 +32,7 @@ class Colors:
     # ── Indicators ────────────────────────────────────────────────────────────
     STAR_COLOR      = "#f4c542"
     HEART_COLOR     = "#ff4466"
-    HEART_OUTLINE   = "#555570"
+    HEART_OUTLINE   = "#9090aa"
     BADGE_BILINGUAL = "#1a6b44"
     BADGE_NEW       = "#7722bb"
 

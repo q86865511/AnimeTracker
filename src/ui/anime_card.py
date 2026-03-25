@@ -179,15 +179,24 @@ class AnimeCard(QFrame):
                 f"font-size: 12px; color: {Colors.TEXT_MUTED};"
             )
 
+    def sync_fav_button(self) -> None:
+        """Re-read fav status from store and update button icon."""
+        if self._fav_store is not None and hasattr(self, "_fav_btn"):
+            self._refresh_fav_btn()
+
     def _refresh_fav_btn(self) -> None:
         is_fav = self._fav_store.contains(self.anime.anime_sn)
         c = Colors
         size = _FAV_BTN_FONT
+        # padding: 0 is REQUIRED — the global stylesheet sets padding: 6px 16px on all
+        # QPushButtons. Without explicit override, the 28 px button gets -4 px content
+        # width, clipping the heart character completely (appears blank).
         if is_fav:
-            self._fav_btn.setText("❤")
+            self._fav_btn.setText("♥")
             self._fav_btn.setStyleSheet(
                 f"QPushButton {{ color: {c.HEART_COLOR}; font-size: {size}px;"
-                f" background-color: rgba(0,0,0,160); border: none; border-radius: 14px; }}"
+                f" background-color: rgba(0,0,0,160); border: none;"
+                f" border-radius: 14px; padding: 0; }}"
                 f" QPushButton:hover {{ background-color: rgba(0,0,0,200); }}"
             )
             self._fav_btn.setToolTip("從最愛移除")
@@ -195,8 +204,10 @@ class AnimeCard(QFrame):
             self._fav_btn.setText("♡")
             self._fav_btn.setStyleSheet(
                 f"QPushButton {{ color: {c.HEART_OUTLINE}; font-size: {size}px;"
-                f" background-color: rgba(0,0,0,140); border: none; border-radius: 14px; }}"
-                f" QPushButton:hover {{ color: {c.HEART_COLOR}; background-color: rgba(0,0,0,200); }}"
+                f" background-color: rgba(0,0,0,140); border: none;"
+                f" border-radius: 14px; padding: 0; }}"
+                f" QPushButton:hover {{ color: {c.HEART_COLOR};"
+                f" background-color: rgba(0,0,0,200); }}"
             )
             self._fav_btn.setToolTip("加入最愛")
 

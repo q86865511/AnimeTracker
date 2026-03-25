@@ -15,7 +15,8 @@ from src.ui.theme import Colors
 class SearchBar(QWidget):
     """Top-level header widget containing the app logo and search input."""
 
-    searched = pyqtSignal(str)  # emits the trimmed keyword
+    searched           = pyqtSignal(str)   # emits the trimmed keyword
+    settings_requested = pyqtSignal()      # settings button clicked
 
     _DEBOUNCE_MS = 400
 
@@ -57,6 +58,19 @@ class SearchBar(QWidget):
         btn.setFixedWidth(64)
         btn.clicked.connect(self._emit_search)
         layout.addWidget(btn)
+
+        settings_btn = QPushButton("⚙")
+        settings_btn.setFixedSize(34, 34)
+        settings_btn.setToolTip("設定")
+        settings_btn.setStyleSheet(
+            f"QPushButton {{ font-size: 16px; padding: 0;"
+            f" background-color: {Colors.BG_CARD};"
+            f" border: 1px solid {Colors.BORDER}; border-radius: 5px; }}"
+            f" QPushButton:hover {{ background-color: {Colors.ACCENT};"
+            f" border-color: {Colors.ACCENT}; color: white; }}"
+        )
+        settings_btn.clicked.connect(self.settings_requested)
+        layout.addWidget(settings_btn)
 
     def _on_text_changed(self, _: str) -> None:
         self._debounce.stop()
