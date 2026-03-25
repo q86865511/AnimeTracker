@@ -36,7 +36,8 @@ _FAV_BTN_FONT = 16          # pt for heart icon
 class AnimeCard(QFrame):
     """Single anime card. Emits clicked(AnimeItem) when the user clicks it."""
 
-    clicked = pyqtSignal(object)
+    clicked     = pyqtSignal(object)
+    fav_changed = pyqtSignal(int, bool)   # (anime_sn, is_added)
 
     def __init__(
         self,
@@ -202,8 +203,9 @@ class AnimeCard(QFrame):
     def _on_fav_clicked(self) -> None:
         """QPushButton.clicked — does not propagate to parent card's mousePressEvent."""
         if self._fav_store:
-            self._fav_store.toggle(self.anime)
+            is_added = self._fav_store.toggle(self.anime)
             self._refresh_fav_btn()
+            self.fav_changed.emit(self.anime.anime_sn, is_added)
 
     # ── Hover / click ──────────────────────────────────────────────────────────
 

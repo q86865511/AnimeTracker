@@ -54,6 +54,9 @@ class MainWindow(QMainWindow):
         # Current tag selection for 所有動畫 view
         self._current_all_anime_tag: str = "全部"
 
+        # Track currently displayed category (for fav refresh)
+        self._current_cat_id: int = HOME_ID
+
         self._build_ui()
         self._load_home()
 
@@ -89,6 +92,7 @@ class MainWindow(QMainWindow):
         self._grid.anime_selected.connect(self._on_anime_selected)
         self._grid.theme_selected.connect(self._on_theme_selected)
         self._grid.tag_filter_changed.connect(self._on_tag_filter_changed)
+        self._grid.fav_toggled.connect(self._on_fav_toggled)
         splitter.addWidget(self._grid)
         splitter.setSizes([195, 1085])
 
@@ -106,14 +110,19 @@ class MainWindow(QMainWindow):
         worker.signals.error.connect(self._on_api_error)
         self._pool.start(worker)
 
-    def _load_all_anime(self, tags: str = "全部") -> None:
+    def _load_all_anime(self, tags: str = "全部", page: int = 1) -> None:
         self._current_all_anime_tag = tags
-        self._grid.show_loading()
-        msg = f"載入「{tags}」動畫中…" if tags != "全部" else "載入所有動畫中…"
-        self._status.showMessage(msg)
-        worker = ApiWorker(self._client.get_web_anime_list, tags, 1)
-        worker.signals.result.connect(self._on_all_anime_loaded)
-        worker.signals.error.connect(self._on_all_anime_error)
+        if page == 1:
+            self._grid.show_loading()
+            msg = f"載入「{tags}」動畫中…" if tags != "全部" else "載入所有動畫中…"
+            self._status.showMessage(msg)
+        worker = ApiWorker(self._client.get_web_anime_list, tags, page)
+        worker.signals.result.connect(
+            lambda items, p=page: self._on_all_anime_loaded(items, p)
+        )
+        worker.signals.error.connect(
+            lambda msg, p=page: self._on_all_anime_error(msg, p)
+        )
         self._pool.start(worker)
 
     def _load_search(self, keyword: str) -> None:
@@ -184,6 +193,7 @@ class MainWindow(QMainWindow):
         self._route_category(cat_id)
 
     def _route_category(self, cat_id: int) -> None:
+        self._current_cat_id = cat_id
         if cat_id == HOME_ID:
             self._grid.display_home(self._index_data)
             self._grid.apply_score_cache(self._score_cache)
@@ -253,26 +263,49 @@ class MainWindow(QMainWindow):
         self._grid.apply_score_cache(self._score_cache)
         self._status.showMessage(f"{title}：{len(items)} 部動畫")
 
+    def _on_fav_toggled(self, anime_sn: int, is_added: bool) -> None:
+        """A card's favourite button was clicked — refresh 我的最愛 page if currently shown."""
+        if self._current_cat_id == FAVORITES_ID:
+            self._route_category(FAVORITES_ID)
+
     def _on_tag_filter_changed(self, tag: str) -> None:
         """Tag chip clicked in 所有動畫 — re-fetch from web API with selected tag."""
         self._load_all_anime(tag)
 
-    def _on_all_anime_loaded(self, items: list[AnimeItem]) -> None:
+    _ALL_ANIME_PAGE_SIZE = 28  # web API returns 28 items per page
+
+    def _on_all_anime_loaded(self, items: list[AnimeItem], page: int = 1) -> None:
         # Web API items carry scores — store them so other pages can use them
         for item in items:
             if item.score > 0:
                 self._score_cache[item.anime_sn] = item.score
-        self._grid.display_all_with_filter(items, active_tag=self._current_all_anime_tag)
-        self._grid.apply_score_cache(self._score_cache)
-        label = self._current_all_anime_tag if self._current_all_anime_tag != "全部" else "所有動畫"
-        self._status.showMessage(f"{label}：{len(items)} 部")
 
-    def _on_all_anime_error(self, message: str) -> None:
-        # Fallback: use aggregated index data (no tags, chips shown but no filter effect)
-        all_items = self._get_all_items_aggregated()
-        self._grid.display_all_with_filter(all_items, active_tag="全部")
+        tag = self._current_all_anime_tag
+        has_more = len(items) >= self._ALL_ANIME_PAGE_SIZE
+        next_cb = (lambda: self._load_all_anime(tag, page + 1)) if has_more else None
+
+        if page == 1:
+            self._grid.display_all_with_filter(
+                items, active_tag=tag, load_more_callback=next_cb
+            )
+        else:
+            self._grid.append_anime(items, has_more=has_more, load_more_callback=next_cb)
+
         self._grid.apply_score_cache(self._score_cache)
-        self._status.showMessage(f"所有動畫（離線）：{len(all_items)} 部")
+        label = tag if tag != "全部" else "所有動畫"
+        total = len(self._grid._cards)
+        self._status.showMessage(f"{label}：已載入 {total} 部")
+
+    def _on_all_anime_error(self, message: str, page: int = 1) -> None:
+        if page == 1:
+            # Fallback: use aggregated index data
+            all_items = self._get_all_items_aggregated()
+            self._grid.display_all_with_filter(all_items, active_tag="全部")
+            self._grid.apply_score_cache(self._score_cache)
+            self._status.showMessage(f"所有動畫（離線）：{len(all_items)} 部")
+        else:
+            # Load-more failed — just notify, keep existing cards
+            self._status.showMessage(f"載入更多失敗：{message}")
 
     def _prefetch_scores(self) -> None:
         """Silently fetch web anime list on startup to pre-populate score cache."""
@@ -297,6 +330,10 @@ class MainWindow(QMainWindow):
         self._prefetch_scores()
 
     def _on_search_loaded(self, items: list[AnimeItem]) -> None:
+        # Search results include score — persist them for other pages
+        for item in items:
+            if item.score > 0:
+                self._score_cache[item.anime_sn] = item.score
         self._grid.display_search_results(items)
         self._grid.apply_score_cache(self._score_cache)
         self._status.showMessage(f"找到 {len(items)} 筆結果")
