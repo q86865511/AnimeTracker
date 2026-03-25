@@ -443,6 +443,8 @@ class AnimeGrid(QWidget):
 
     def _setup_load_more_api(self, gen: int, callback) -> None:
         """Show load-more button that triggers an API call via callback."""
+        self._load_more_btn.setEnabled(True)
+        self._load_more_btn.setText("🔽  載入更多")
         self._load_more_btn.show()
 
         def _on_click() -> None:

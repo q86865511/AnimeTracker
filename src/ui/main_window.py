@@ -252,6 +252,13 @@ class MainWindow(QMainWindow):
         # Update current page card with the loaded score
         if dialog.loaded_score > 0:
             self._grid.update_card_score(anime.anime_sn, dialog.loaded_score)
+        # Sync the card's fav button (user may have toggled fav inside the dialog)
+        card = self._grid._cards.get(anime.anime_sn)
+        if card is not None:
+            card.sync_fav_button()
+        # Refresh favorites page if currently shown (item may have been added/removed)
+        if self._current_cat_id == FAVORITES_ID:
+            self._route_category(FAVORITES_ID)
 
     def _on_theme_selected(self, index: int, title: str) -> None:
         cats = self._index_data.get("category", []) or []
@@ -307,19 +314,24 @@ class MainWindow(QMainWindow):
             # Load-more failed — just notify, keep existing cards
             self._status.showMessage(f"載入更多失敗：{message}")
 
-    def _prefetch_scores(self) -> None:
-        """Silently fetch web anime list on startup to pre-populate score cache."""
-        worker = ApiWorker(self._client.get_web_anime_list, "全部", 1)
-        worker.signals.result.connect(self._on_scores_prefetched)
+    def _prefetch_scores(self, page: int = 1) -> None:
+        """Silently fetch all web anime list pages to pre-populate score cache."""
+        worker = ApiWorker(self._client.get_web_anime_list, "全部", page)
+        worker.signals.result.connect(
+            lambda items, p=page: self._on_scores_prefetched(items, p)
+        )
         # No error slot — silent failure is acceptable for prefetch
         self._pool.start(worker)
 
-    def _on_scores_prefetched(self, items: list[AnimeItem]) -> None:
+    def _on_scores_prefetched(self, items: list[AnimeItem], page: int = 1) -> None:
         for item in items:
             if item.score > 0:
                 self._score_cache[item.anime_sn] = item.score
         # Apply to whatever page is currently shown
         self._grid.apply_score_cache(self._score_cache)
+        # If this page was full, there may be more pages — keep fetching (cap at 50)
+        if len(items) >= self._ALL_ANIME_PAGE_SIZE and page < 50:
+            self._prefetch_scores(page + 1)
 
     def _on_home_loaded(self, data: dict) -> None:
         self._index_data = data
