@@ -34,7 +34,7 @@ from src.ui.theme import Colors
 from src.utils.cache import ImageCache
 from src.workers.image_worker import ImageWorker
 
-COLUMNS      = 12
+COLUMNS      = 10
 CARD_SPACING = 14
 
 # Tag chips for 所有動畫 filter bar (matching ani.gamer.com.tw tag taxonomy)
@@ -65,7 +65,6 @@ class AnimeGrid(QWidget):
     anime_selected    = pyqtSignal(object)          # AnimeItem
     theme_selected    = pyqtSignal(int, str)         # (index, title) for editorial category
     tag_filter_changed = pyqtSignal(str)             # tag name; "全部" = reset
-    fav_toggled       = pyqtSignal(int, bool)        # (anime_sn, is_added) forwarded from cards
 
     def __init__(
         self,
@@ -319,15 +318,11 @@ class AnimeGrid(QWidget):
             self._load_more_btn.show()
 
     def display_all_with_filter(
-        self,
-        all_items: list[AnimeItem],
-        active_tag: str = "全部",
-        load_more_callback=None,
+        self, all_items: list[AnimeItem], active_tag: str = "全部"
     ) -> None:
         """
         所有動畫 — show all_items in a grid with ANIME_TAGS filter chips.
         Clicking a chip emits tag_filter_changed(tag); MainWindow handles the fetch.
-        If load_more_callback is provided, a "載入更多" button is shown.
         """
         self._generation += 1
         gen = self._generation
@@ -342,9 +337,6 @@ class AnimeGrid(QWidget):
 
         self._populate_grid(all_items)
         self._load_images(all_items, gen)
-
-        if load_more_callback:
-            self._setup_load_more_api(gen, load_more_callback)
 
     def display_editorial_themes(
         self,
@@ -386,7 +378,6 @@ class AnimeGrid(QWidget):
     def _make_card(self, anime: AnimeItem) -> AnimeCard:
         card = AnimeCard(anime, self._fav_store)
         card.clicked.connect(self.anime_selected)
-        card.fav_changed.connect(self.fav_toggled)
         return card
 
     def _populate_grid(self, anime_list: list[AnimeItem]) -> None:
@@ -440,50 +431,6 @@ class AnimeGrid(QWidget):
             self._load_more_btn.setEnabled(False)
 
         self._load_more_btn.clicked.connect(_on_load_more)
-
-    def _setup_load_more_api(self, gen: int, callback) -> None:
-        """Show load-more button that triggers an API call via callback."""
-        self._load_more_btn.show()
-
-        def _on_click() -> None:
-            if gen != self._generation:
-                return
-            self._load_more_btn.setEnabled(False)
-            self._load_more_btn.setText("載入中…")
-            callback()
-
-        self._load_more_btn.clicked.connect(_on_click)
-
-    def append_anime(
-        self,
-        items: list[AnimeItem],
-        has_more: bool = False,
-        load_more_callback=None,
-    ) -> None:
-        """Append items to the current grid without clearing (used for load-more pages)."""
-        gen = self._generation
-        start_idx = len(self._cards)
-        for i, anime in enumerate(items):
-            idx = start_idx + i
-            row, col = divmod(idx, COLUMNS)
-            card = self._make_card(anime)
-            self._grid.addWidget(card, row, col)
-            key = anime.anime_sn if anime.anime_sn else -(idx + 1)
-            self._cards[key] = card
-        self._load_images(items, gen)
-
-        # Reset and re-configure load-more button
-        try:
-            self._load_more_btn.clicked.disconnect()
-        except TypeError:
-            pass
-
-        if has_more and load_more_callback:
-            self._setup_load_more_api(gen, load_more_callback)
-        else:
-            self._load_more_btn.setText("已顯示全部內容")
-            self._load_more_btn.setEnabled(False)
-            self._load_more_btn.show()
 
     def _rebuild_filter_bar(self, active_tag: str = "全部") -> None:
         """Build tag filter chips. Chip clicks emit tag_filter_changed — no in-memory filter."""
