@@ -75,6 +75,7 @@ class MainWindow(QMainWindow):
 
         self._search_bar = SearchBar()
         self._search_bar.searched.connect(self._on_searched)
+        self._search_bar.settings_requested.connect(self._open_settings)
         root.addWidget(self._search_bar)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -314,24 +315,33 @@ class MainWindow(QMainWindow):
             # Load-more failed — just notify, keep existing cards
             self._status.showMessage(f"載入更多失敗：{message}")
 
-    def _prefetch_scores(self, page: int = 1) -> None:
-        """Silently fetch all web anime list pages to pre-populate score cache."""
+    # Number of parallel chains used to prefetch all web-API pages.
+    # Chain k starts at page k and jumps by _PREFETCH_CHAINS each step.
+    # e.g. with 6 chains: A=1,7,13…  B=2,8,14…  C=3,9,15…  D=4,10,16…  E=5,11,17…  F=6,12,18…
+    _PREFETCH_CHAINS = 6
+
+    def _prefetch_scores(self) -> None:
+        """Launch parallel chains to fetch scores from ALL web-API pages."""
+        for start in range(1, self._PREFETCH_CHAINS + 1):
+            self._run_prefetch_page(start)
+
+    def _run_prefetch_page(self, page: int) -> None:
         worker = ApiWorker(self._client.get_web_anime_list, "全部", page)
         worker.signals.result.connect(
             lambda items, p=page: self._on_scores_prefetched(items, p)
         )
-        # No error slot — silent failure is acceptable for prefetch
         self._pool.start(worker)
 
     def _on_scores_prefetched(self, items: list[AnimeItem], page: int = 1) -> None:
         for item in items:
             if item.score > 0:
                 self._score_cache[item.anime_sn] = item.score
-        # Apply to whatever page is currently shown
         self._grid.apply_score_cache(self._score_cache)
-        # If this page was full, there may be more pages — keep fetching (cap at 50)
-        if len(items) >= self._ALL_ANIME_PAGE_SIZE and page < 50:
-            self._prefetch_scores(page + 1)
+        # Continue this chain's next page if still getting full pages
+        if len(items) >= self._ALL_ANIME_PAGE_SIZE:
+            next_page = page + self._PREFETCH_CHAINS
+            if next_page <= 120:   # safety cap (~3360 anime max)
+                self._run_prefetch_page(next_page)
 
     def _on_home_loaded(self, data: dict) -> None:
         self._index_data = data
@@ -349,6 +359,10 @@ class MainWindow(QMainWindow):
         self._grid.display_search_results(items)
         self._grid.apply_score_cache(self._score_cache)
         self._status.showMessage(f"找到 {len(items)} 筆結果")
+
+    def _open_settings(self) -> None:
+        from src.ui.settings_dialog import SettingsDialog
+        SettingsDialog(parent=self).exec()
 
     def _on_api_error(self, message: str) -> None:
         self._grid.show_error(message)
