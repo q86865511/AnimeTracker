@@ -2,6 +2,11 @@
 
 一款以 PyQt6 建構的 Windows 桌面應用程式，整合巴哈姆特動畫瘋 API，提供流暢的動畫目錄瀏覽體驗。
 
+[![CI](https://github.com/q86865511/AnimeTracker/actions/workflows/ci.yml/badge.svg)](https://github.com/q86865511/AnimeTracker/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![PyQt6](https://img.shields.io/badge/GUI-PyQt6-41CD52?logo=qt&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 ## 功能
 
 - **首頁** — 近期熱播動畫卡片格狀瀏覽
