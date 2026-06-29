@@ -1,6 +1,6 @@
 # AnimeTracker
 
-一款以 PyQt6 建構的 Windows 桌面應用程式，整合巴哈姆特動畫瘋 API，提供流暢的動畫目錄瀏覽體驗。
+一款以 PyQt6 建構的 Windows 桌面應用程式，整合巴哈姆特動畫瘋（非官方、逆向觀察）API，提供流暢的動畫目錄瀏覽體驗。僅供個人學習用途。
 
 [![CI](https://github.com/q86865511/AnimeTracker/actions/workflows/ci.yml/badge.svg)](https://github.com/q86865511/AnimeTracker/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
@@ -21,6 +21,16 @@
 - **封面圖快取** — 磁碟快取，7 天 TTL，離線可用舊快取
 - **非同步載入** — 所有 API 與圖片下載均在背景執行，UI 不卡頓
 - **巴哈姆特深色主題** — 仿巴哈姆特深色模式配色（極深藍黑背景 + 橘紅強調色）
+
+## 截圖
+
+> 建議補上實機畫面（作品集加分項）。把圖片放到 `docs/screenshots/` 後，取消下列註解並更新路徑即可。
+
+<!--
+| 首頁 | 動畫詳情 | 所有動畫（標籤篩選） |
+|------|----------|----------------------|
+| ![home](docs/screenshots/home.png) | ![detail](docs/screenshots/detail.png) | ![all](docs/screenshots/all.png) |
+-->
 
 ## 系統需求
 
